@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blackjack Royal Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #d4af37;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #051a0e;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            color: white;
+            touch-action: manipulation;
+        }
+
+        .casino-table {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #1a6d3c 0%, #0a4d26 70%, #052b15 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        /* Kart Tasarımı */
+        .card {
+            width: 52px;
+            height: 75px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 5px;
+            color: #1a1a1a;
+            position: relative;
+            animation: dealCard 0.4s ease-out forwards;
+            border: 1px solid #ddd;
+            user-select: none;
+            z-index: 10;
+        }
+
+        @keyframes dealCard {
+            from { transform: translate(150px, -150px) rotate(45deg); opacity: 0; }
+            to { transform: translate(0, 0) rotate(0); opacity: 1; }
+        }
+
+        .card.red { color: #cc0000; }
+        .card .suit-center { font-size: 1.2rem; text-align: center; line-height: 1; }
+
+        .card-back {
+            background-color: #7b0000;
+            background-image: radial-gradient(circle, #a00000 10%, transparent 11%),
+                              radial-gradient(circle at 0 0, #a00000 5%, transparent 6%);
+            background-size: 8px 8px;
+            border: 2px solid white;
+        }
+
+        /* Jetonlar */
+        .chip {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 3px dashed rgba(255,255,255,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 10px;
+            cursor: pointer;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+            transition: transform 0.1s active;
+            user-select: none;
+        }
+
+        .chip-10 { background: #3b82f6; border-color: #1d4ed8; }
+        .chip-50 { background: #ef4444; border-color: #b91c1c; }
+        .chip-100 { background: #10b981; border-color: #047857; }
+
+        /* Jeton Fırlatma Animasyonu */
+        .flew-chip {
+            position: fixed;
+            z-index: 100;
+            pointer-events: none;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .table-chip {
+            position: absolute;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #lobby-overlay, #end-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.95);
+        }
+
+        .hidden-modal { display: none !important; }
+        .cinzel { font-family: 'Cinzel', serif; }
+
+        .controls {
+            background: rgba(0,0,0,0.8);
+            padding: 0.4rem;
+            border-radius: 12px;
+            border: 1px solid var(--gold);
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 320px;
+        }
+
+        .btn-game {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 0.7rem;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            cursor: pointer;
+        }
+
+        .btn-game:disabled { opacity: 0.2; filter: grayscale(1); cursor: not-allowed; }
+
+        .btn-peek {
+            background: #d4af37;
+            color: black;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: bold;
+            margin-top: 5px;
+            transition: opacity 0.2s;
+        }
+
+        .player-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            transition: opacity 0.3s;
+        }
+
+        .player-top { transform: rotate(180deg); }
+        .turn-active { filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.4)); }
+        .turn-inactive { opacity: 0.3; pointer-events: none; }
+        
+        #placed-chips-container {
+            width: 150px;
+            height: 150px;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-overlay">
+        <h1 class="cinzel text-5xl text-gold mb-2">ROYAL</h1>
+        <h2 class="cinzel text-xl text-white mb-10 tracking-widest">BLACKJACK</h2>
+        <div class="flex flex-col gap-4 w-64">
+            <button onclick="initGame('bot')" class="bg-gold text-black py-4 rounded-xl font-bold cinzel text-lg active:scale-95">BOT İLE OYNA</button>
+            <button onclick="initGame('pvp')" class="border-2 border-gold text-gold py-4 rounded-xl font-bold cinzel text-lg active:bg-gold active:text-black">ARKADAŞINLA OYNA</button>
+        </div>
+    </div>
+
+    <div id="end-modal" class="hidden-modal">
+        <div class="bg-black border-2 border-gold p-8 rounded-2xl w-80 text-center">
+            <h2 id="modal-title" class="cinzel text-3xl mb-2 text-gold">SONUÇ</h2>
+            <p id="modal-subtitle" class="text-gray-400 text-sm mb-6"></p>
+            <button onclick="resetTable()" class="w-full bg-gold text-black py-3 rounded-lg font-bold cinzel">YENİDEN OYNA</button>
+            <button onclick="location.reload()" class="mt-4 text-gray-500 text-xs cinzel block w-full">ANA MENÜ</button>
+        </div>
+    </div>
+
+    <div class="casino-table">
+        
+        <!-- ÜST OYUNCU -->
+        <div id="top-zone" class="player-zone player-top turn-inactive">
+            <div id="top-chip-selector" class="flex gap-2 mb-2">
+                <div class="chip chip-10" onclick="handleBet(event, 10, 2)">10</div>
+                <div class="chip chip-50" onclick="handleBet(event, 50, 2)">50</div>
+                <div class="chip chip-100" onclick="handleBet(event, 100, 2)">100</div>
+            </div>
+            <div class="controls mb-1">
+                <button id="top-clear" class="btn-game cinzel" onclick="handleClear(2)"><span>↺</span><span>TEMİZLE</span></button>
+                <button id="top-deal" class="btn-game cinzel" onclick="startDeal()"><span>♠</span><span>DAĞIT</span></button>
+                <button id="top-hit" class="btn-game cinzel" onclick="handleHit(2)" disabled><span>+</span><span>KART</span></button>
+                <button id="top-stand" class="btn-game cinzel" onclick="handleStand(2)" disabled><span>✋</span><span>DUR</span></button>
+            </div>
+            <button id="top-peek" class="btn-peek cinzel hidden" 
+                onmousedown="setPeek(2, true)" onmouseup="setPeek(2, false)"
+                ontouchstart="setPeek(2, true)" ontouchend="setPeek(2, false)">KARTLARIMA BAK</button>
+            <div id="top-cards" class="flex gap-1 min-h-[75px] justify-center mt-2"></div>
+            <div class="flex justify-between w-full px-6 text-[10px] mt-1">
+                <div id="top-score-ui" class="bg-black/40 px-3 py-1 rounded-full text-gold">Skor: ?</div>
+                <div class="flex gap-4">
+                    <span id="top-balance" class="text-green-400 font-bold">$1000</span>
+                    <span id="top-bet" class="text-yellow-400 font-bold">$0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ORTA ALAN -->
+        <div class="flex flex-col items-center justify-center flex-grow">
+            <div id="center-status" class="text-gold cinzel text-[10px] mb-4 tracking-widest text-center uppercase">Lobi Bekleniyor</div>
+            <div id="placed-chips-container" class="rounded-full border border-gold/10 flex items-center justify-center"></div>
+        </div>
+
+        <!-- ALT OYUNCU -->
+        <div id="bottom-zone" class="player-zone">
+            <div class="flex justify-between w-full px-6 text-[10px] mb-1">
+                <div id="bottom-score-ui" class="bg-black/40 px-3 py-1 rounded-full text-gold">Skor: 0</div>
+                <div class="flex gap-4">
+                    <span id="bottom-balance" class="text-green-400 font-bold">$1000</span>
+                    <span id="bottom-bet" class="text-yellow-400 font-bold">$0</span>
+                </div>
+            </div>
+            <div id="bottom-cards" class="flex gap-1 min-h-[75px] justify-center mb-2"></div>
+            <button id="bottom-peek" class="btn-peek cinzel hidden" 
+                onmousedown="setPeek(1, true)" onmouseup="setPeek(1, false)"
+                ontouchstart="setPeek(1, true)" ontouchend="setPeek(1, false)">KARTLARIMA BAK</button>
+            <div class="controls mt-1 mb-2">
+                <button id="bottom-clear" class="btn-game cinzel" onclick="handleClear(1)"><span>↺</span><span>TEMİZLE</span></button>
+                <button id="bottom-deal" class="btn-game cinzel" onclick="startDeal()"><span>♠</span><span>DAĞIT</span></button>
+                <button id="bottom-hit" class="btn-game cinzel" onclick="handleHit(1)" disabled><span>+</span><span>KART</span></button>
+                <button id="bottom-stand" class="btn-game cinzel" onclick="handleStand(1)" disabled><span>✋</span><span>DUR</span></button>
+            </div>
+            <div id="bottom-chip-selector" class="flex gap-2">
+                <div class="chip chip-10" onclick="handleBet(event, 10, 1)">10</div>
+                <div class="chip chip-50" onclick="handleBet(event, 50, 1)">50</div>
+                <div class="chip chip-100" onclick="handleBet(event, 100, 1)">100</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playTone(f, t, d, v=0.05) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+                o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+                g.gain.setValueAtTime(v, audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
+                o.connect(g); g.connect(audioCtx.destination);
+                o.start(); o.stop(audioCtx.currentTime + d);
+            } catch(e) {}
+        }
+
+        const sounds = {
+            card: () => playTone(600, 'square', 0.1),
+            chip: () => playTone(1200, 'sine', 0.08),
+            win: () => { playTone(523, 'sine', 0.5); playTone(659, 'sine', 0.5); },
+            lose: () => playTone(200, 'sawtooth', 0.5),
+            click: () => playTone(800, 'sine', 0.05)
+        };
+
+        const SUITS = [{s:'♠',n:'spades'},{s:'♣',n:'clubs'},{s:'♥',n:'hearts'},{s:'♦',n:'diamonds'}];
+        const VALS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+        
+        let gameMode = 'bot'; 
+        let deck = [];
+        let hands = { 1: [], 2: [] };
+        let balances = { 1: 1000, 2: 1000 };
+        let bets = { 1: 0, 2: 0 };
+        let turn = 1; 
+        let gameState = 'lobby'; 
+        let isPeeking = false;
+
+        function initGame(mode) {
+            gameMode = mode;
+            gameState = 'betting';
+            document.getElementById('lobby-overlay').classList.add('hidden-modal');
+            
+            if (mode === 'bot') {
+                document.getElementById('top-chip-selector').style.display = 'none';
+                document.getElementById('top-clear').style.display = 'none';
+                document.getElementById('top-deal').style.display = 'none';
+                document.getElementById('center-status').textContent = "BAHİS KOY VE DAĞIT'A BAS";
+            } else {
+                document.getElementById('top-chip-selector').style.display = 'flex';
+                document.getElementById('top-clear').style.display = 'flex';
+                document.getElementById('top-deal').style.display = 'flex';
+                document.getElementById('center-status').textContent = "BAHİSLERİ BELİRLEYİN";
+            }
+            updateTurnUI();
+            updateUI();
+        }
+
+        function handleBet(event, amt, player) {
+            if (gameState !== 'betting') return;
+            if (balances[player] < amt) return;
+            
+            sounds.chip();
+            bets[player] += amt;
+            balances[player] -= amt;
+            
+            animateChip(event.target, amt, player);
+            updateUI();
+        }
+
+        function animateChip(sourceElement, amt, player) {
+            const rect = sourceElement.getBoundingClientRect();
+            const container = document.getElementById('placed-chips-container');
+            const targetRect = container.getBoundingClientRect();
+
+            const flyer = document.createElement('div');
+            flyer.className = `chip chip-${amt} flew-chip`;
+            flyer.style.left = rect.left + 'px';
+            flyer.style.top = rect.top + 'px';
+            flyer.textContent = amt;
+            if (player === 2) flyer.style.transform = 'rotate(180deg)';
+            document.body.appendChild(flyer);
+
+            const targetX = targetRect.left + (targetRect.width / 2) - 19 + (Math.random() * 40 - 20);
+            const targetY = targetRect.top + (targetRect.height / 2) - 19 + (Math.random() * 40 - 20);
+
+            requestAnimationFrame(() => {
+                flyer.style.left = targetX + 'px';
+                flyer.style.top = targetY + 'px';
+                flyer.style.opacity = '0.8';
+                
+                setTimeout(() => {
+                    flyer.remove();
+                    const tableChip = document.createElement('div');
+                    tableChip.className = `chip chip-${amt} table-chip`;
+                    tableChip.style.left = (targetX - targetRect.left) + 'px';
+                    tableChip.style.top = (targetY - targetRect.top) + 'px';
+                    tableChip.style.transform = `rotate(${Math.random() * 360}deg) scale(0.8)`;
+                    tableChip.textContent = amt;
+                    container.appendChild(tableChip);
+                }, 500);
+            });
+        }
+
+        function handleClear(player) {
+            if (gameState !== 'betting') return;
+            balances[player] += bets[player];
+            bets[player] = 0;
+            sounds.click();
+            document.getElementById('placed-chips-container').innerHTML = '';
+            updateUI();
+        }
+
+        function createDeck() {
+            deck = [];
+            SUITS.forEach(s => VALS.forEach(v => deck.push({s:s.s, n:s.n, v:v})));
+            deck.sort(() => Math.random() - 0.5);
+        }
+
+        function getVal(hand) {
+            let v = 0, a = 0;
+            hand.forEach(c => {
+                if (c.v === 'A') { a++; v += 11; }
+                else if (['J','Q','K','10'].includes(c.v)) v += 10;
+                else v += parseInt(c.v);
+            });
+            while (v > 21 && a > 0) { v -= 10; a--; }
+            return v;
+        }
+
+        async function startDeal() {
+            if (gameState !== 'betting') return;
+            if (bets[1] === 0 || (gameMode === 'pvp' && bets[2] === 0)) return;
+
+            gameState = 'playing';
+            createDeck();
+            hands = { 1: [], 2: [] };
+            
+            for(let i=0; i<2; i++) {
+                hands[1].push(deck.pop()); sounds.card(); render(); await sleep(300);
+                hands[2].push(deck.pop()); sounds.card(); render(); await sleep(300);
+            }
+
+            turn = 1;
+            updateTurnUI();
+            document.getElementById('center-status').textContent = "P1 SIRASI";
+            if (getVal(hands[1]) === 21) handleStand(1);
+        }
+
+        function render(forceHide = true) {
+            const p1c = document.getElementById('bottom-cards');
+            const p2c = document.getElementById('top-cards');
+            p1c.innerHTML = ''; p2c.innerHTML = '';
+
+            hands[1].forEach(c => {
+                let hide = (gameMode === 'pvp' && (turn !== 1 || (turn === 1 && forceHide))) && gameState === 'playing';
+                p1c.appendChild(createCardUI(c, hide));
+            });
+
+            hands[2].forEach((c, i) => {
+                let hide = false;
+                if (gameMode === 'bot' && forceHide && i === 1) hide = true;
+                // DÜZELTME: Parantez hatası giderildi
+                if (gameMode === 'pvp' && (turn !== 2 || (turn === 2 && forceHide)) && gameState === 'playing') hide = true;
+                p2c.appendChild(createCardUI(c, hide));
+            });
+
+            const s1 = (gameMode === 'pvp' && turn !== 1 && forceHide && gameState === 'playing') ? '?' : getVal(hands[1]);
+            const s2 = (gameMode === 'bot' && forceHide) ? '?' : (gameMode === 'pvp' && turn !== 2 && forceHide && gameState === 'playing' ? '?' : getVal(hands[2]));
+            
+            document.getElementById('bottom-score-ui').textContent = `Skor: ${s1}`;
+            document.getElementById('top-score-ui').textContent = `Skor: ${s2}`;
+        }
+
+        function createCardUI(c, h = false) {
+            const d = document.createElement('div');
+            if (h) { d.className = 'card card-back'; return d; }
+            const red = c.n === 'hearts' || c.n === 'diamonds';
+            d.className = `card ${red ? 'red' : ''}`;
+            d.innerHTML = `<div class="text-[9px] font-bold leading-none">${c.v}<br>${c.s}</div><div class="suit-center">${c.s}</div><div class="rotate-180 text-[9px] font-bold leading-none">${c.v}<br>${c.s}</div>`;
+            return d;
+        }
+
+        function setPeek(player, state) {
+            if (turn !== player || gameState !== 'playing') return;
+            isPeeking = state;
+            render(!isPeeking);
+        }
+
+        function handleHit(player) {
+            if (turn !== player || gameState !== 'playing') return;
+            sounds.card();
+            hands[player].push(deck.pop());
+            render(true);
+            if (getVal(hands[player]) >= 21) handleStand(player);
+        }
+
+        async function handleStand(player) {
+            if (turn !== player || gameState !== 'playing') return;
+            sounds.click();
+            isPeeking = false;
+            
+            if (player === 1) {
+                if (gameMode === 'bot') {
+                    runBot();
+                } else {
+                    turn = 2;
+                    updateTurnUI();
+                    document.getElementById('center-status').textContent = "P2 SIRASI - CİHAZI VERİN";
+                    render(true);
+                    if (getVal(hands[2]) === 21) handleStand(2);
+                }
+            } else {
+                calcResults();
+            }
+        }
+
+        async function runBot() {
+            turn = 2; 
+            updateTurnUI();
+            render(false);
+            await sleep(600);
+            while (getVal(hands[2]) < 17) {
+                hands[2].push(deck.pop());
+                sounds.card();
+                render(false);
+                await sleep(600);
+            }
+            calcResults();
+        }
+
+        function calcResults() {
+            gameState = 'ended';
+            render(false);
+            const v1 = getVal(hands[1]);
+            const v2 = getVal(hands[2]);
+            let t = "SONUÇ", s = "";
+
+            if (gameMode === 'bot') {
+                if (v1 > 21) { t = "KAYBETTİN"; s = "Patladınız!"; }
+                else if (v2 > 21 || v1 > v2) { t = "KAZANDIN!"; s = "Kasayı geçtiniz!"; balances[1] += bets[1] * 2; }
+                else if (v1 < v2) { t = "KAYBETTİN"; s = "Kasa kazandı."; }
+                else { t = "BERABERE"; s = "Bahis iade."; balances[1] += bets[1]; }
+            } else {
+                if (v1 > 21 && v2 > 21) { t = "HERKES PATLADI"; s = "İki taraf da kaybetti."; }
+                else if (v1 > 21) { t = "P2 KAZANDI"; s = "P1 patladı."; balances[2] += (bets[1] + bets[2]); }
+                else if (v2 > 21) { t = "P1 KAZANDI"; s = "P2 patladı."; balances[1] += (bets[1] + bets[2]); }
+                else if (v1 > v2) { t = "P1 KAZANDI"; s = "Skor üstünlüğü P1'de."; balances[1] += (bets[1] + bets[2]); }
+                else if (v2 > v1) { t = "P2 KAZANDI"; s = "Skor üstünlüğü P2'de."; balances[2] += (bets[1] + bets[2]); }
+                else { t = "BERABERE"; s = "Bahisler iade."; balances[1] += bets[1]; balances[2] += bets[2]; }
+            }
+
+            setTimeout(() => {
+                document.getElementById('modal-title').textContent = t;
+                document.getElementById('modal-subtitle').textContent = s;
+                document.getElementById('end-modal').classList.remove('hidden-modal');
+                if (t.includes("KAZAN")) sounds.win(); else sounds.lose();
+            }, 600);
+        }
+
+        function resetTable() {
+            document.getElementById('end-modal').classList.add('hidden-modal');
+            document.getElementById('bottom-cards').innerHTML = '';
+            document.getElementById('top-cards').innerHTML = '';
+            document.getElementById('placed-chips-container').innerHTML = '';
+            gameState = 'betting';
+            bets = { 1: 0, 2: 0 };
+            turn = 1;
+            updateUI();
+            updateTurnUI();
+            document.getElementById('center-status').textContent = "BAHİSLERİ BELİRLEYİN";
+        }
+
+        function updateUI() {
+            document.getElementById('bottom-balance').textContent = `$${balances[1]}`;
+            document.getElementById('bottom-bet').textContent = `$${bets[1]}`;
+            document.getElementById('top-balance').textContent = `$${balances[2]}`;
+            document.getElementById('top-bet').textContent = `$${bets[2]}`;
+        }
+
+        function updateTurnUI() {
+            const bz = document.getElementById('bottom-zone');
+            const tz = document.getElementById('top-zone');
+            const bPeek = document.getElementById('bottom-peek');
+            const tPeek = document.getElementById('top-peek');
+            
+            const bBtn = { hit: document.getElementById('bottom-hit'), stand: document.getElementById('bottom-stand'), deal: document.getElementById('bottom-deal') };
+            const tBtn = { hit: document.getElementById('top-hit'), stand: document.getElementById('top-stand'), deal: document.getElementById('top-deal') };
+
+            if (gameState === 'betting') {
+                bz.classList.remove('turn-inactive');
+                tz.classList.remove('turn-inactive');
+                bBtn.deal.disabled = false;
+                tBtn.deal.disabled = false;
+                bBtn.hit.disabled = bBtn.stand.disabled = tBtn.hit.disabled = tBtn.stand.disabled = true;
+                bPeek.classList.add('hidden');
+                tPeek.classList.add('hidden');
+            } else if (gameState === 'playing') {
+                bz.classList.toggle('turn-inactive', turn !== 1);
+                tz.classList.toggle('turn-inactive', turn !== 2);
+                
+                bBtn.hit.disabled = bBtn.stand.disabled = (turn !== 1);
+                tBtn.hit.disabled = tBtn.stand.disabled = (turn !== 2);
+                bBtn.deal.disabled = tBtn.deal.disabled = true;
+
+                if (gameMode === 'pvp') {
+                    bPeek.classList.toggle('hidden', turn !== 1);
+                    tPeek.classList.toggle('hidden', turn !== 2);
+                }
+            }
+        }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    </script>
+</body>
+</html>
+
